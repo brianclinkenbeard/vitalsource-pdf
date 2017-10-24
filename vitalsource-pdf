@@ -1,0 +1,124 @@
+#!/bin/sh
+
+# Copyright (c) 2017
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# strictness
+set -eu
+
+# set minimum and maximum delay in seconds between page requests
+MINDELAY=5
+MAXDELAY=10
+
+# save script execution before we clear positional parameters
+script="$0"
+
+usage() { printf 'Usage: %s [-c <cookie>] [-i <isbn>] [-s <start page>] [-n <number of pages>]\n' "$script" 1>&2; }
+
+while getopts "c:i:s:n:h" o; do
+	case "${o}" in
+		c)
+			cookie=${OPTARG}
+			;;
+		i)
+			isbn=${OPTARG}
+			;;
+		s)
+			start_page=${OPTARG}
+			;;
+		n)
+			num_pages=${OPTARG}
+			;;
+		h)
+			usage
+			exit 0
+			;;
+		*)
+			usage
+			exit 1
+			;;
+	esac
+done
+
+if [ -z "${cookie:-}" ] || [ -z "${isbn:-}" ] || [ -z "${start_page:-}" ] || [ -z "${num_pages:-}" ] || [ "$num_pages" -lt 1 ]; then
+	usage
+	exit 1
+fi
+
+# clear positional parameters
+set --
+
+# folder to store images
+mkdir -p "$isbn"
+
+printf ':: Fetching pages...\n'
+for i in $(seq 0 $((num_pages - 1)))
+do
+	page="$((i + start_page))"
+
+	# dont sleep before first page
+	if [ "$page" -ne "$start_page" ]; then
+		# sleep for random number of seconds between 1 and 10
+		sleep_time=$(shuf -i ${MINDELAY}-${MAXDELAY} -n 1)
+		printf 'Sleeping for %s...\n' "${sleep_time}s"
+		sleep "$sleep_time"
+	fi
+
+	# find page image
+	printf 'Getting page %s...\n' "$page"
+	img=$( curl -s "https://jigsaw.vitalsource.com/books/${isbn}/pages/${page}/content?width=2000" -H 'Host: jigsaw.vitalsource.com' \
+		-H 'User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0' \
+		-H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.5' --compressed \
+		-H "Referer: https://jigsaw.vitalsource.com/books/${isbn}/pages/recent?jigsaw_brand=vitalsource&xdm_e=https%3A%2F%2Fbookshelf.vitalsource.com&xdm_c=default191&xdm_p=1" \
+		-H "Cookie: $cookie" -H 'Connection: keep-alive' -H 'Upgrade-Insecure-Requests: 1' | sed -n '/<img/s/.*src="\([^"]*\)".*/\1/p')
+
+	if [ -z "${img:-}" ]; then
+		printf 'Error: No images found within requested page. Likely an invalid cookie, ISBN, or page.\n'
+		exit 1
+	fi
+
+	# download page
+	printf 'Getting image: %s...\n' "$img" # only show suffix to avoid accidental click
+	 curl -s "https://jigsaw.vitalsource.com${img}" -H 'Host: jigsaw.vitalsource.com' -H 'User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0' \
+		-H 'Accept: */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H "Referer: https://jigsaw.vitalsource.com/books/${isbn}/pages/${page}/content?width=2000" \
+		-H "Cookie: $cookie" -H 'Connection: keep-alive' > "${isbn}/${page}.jpg"
+
+	# add page to array
+	set -- "$@" "${isbn}/${page}.jpg"
+done
+
+printf ':: Attempting to create PDF...\n'
+
+pdf="${isbn}/${start_page}-$((start_page + num_pages - 1)).pdf"
+
+if command -v img2pdf >/dev/null ; then
+	img2pdf --output "$pdf" -- "$@"
+else
+	printf '%s %s\n%s' "WARNING: img2pdf does not appear to be installed. Conversion to PDF using ImageMagick instead will result in minor image quality loss and may exceed" \
+		"resource limits for large page ranges." "Fall back on ImageMagick anyway? [y/n] "
+	read -r answer
+	if printf '%s' "$answer" | grep -iq "^y" ; then
+		if command -v convert >/dev/null ; then
+			convert -- "$@" "$pdf"
+		else
+			printf 'ImageMagick is not installed.\n'
+			exit 1
+		fi
+	else
+		printf 'No PDF will be created.\n'
+		exit 0
+	fi
+fi
+
+printf 'PDF saved to %s\n' "$pdf"
