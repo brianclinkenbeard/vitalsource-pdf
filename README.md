@@ -11,3 +11,5 @@ Usage: ./vitalsource-pdf [-c <cookie>] [-i <isbn>] [-s <start page>] [-n <number
 ## Todo
 * Option for custom page width
 * Option to download pages without creating PDF
+* Default configuration (i.e. setting ISBN without passing it as a flag each time)
+* Improve image url extraction
