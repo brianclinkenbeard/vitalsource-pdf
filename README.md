@@ -7,9 +7,4 @@ It is recommended to install josch's [img2pdf](https://gitlab.mister-muffin.de/j
 ```
 Usage: ./vitalsource-pdf [-c <cookie>] [-i <isbn>] [-s <start page>] [-n <number of pages>]
 ```
-
-## Todo
-* Option for custom page width
-* Option to download pages without creating PDF
-* Default configuration (i.e. setting ISBN without passing it as a flag each time)
-* Improve image url extraction
+To find your cookie, use the developer tools on Firefox or Chrome after logging in to VitalSource. The cookie string should contain `_jigsaw_session`.

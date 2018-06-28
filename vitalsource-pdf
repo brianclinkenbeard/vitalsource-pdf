@@ -21,6 +21,10 @@ set -eu
 MINDELAY=5
 MAXDELAY=10
 
+# default configuration
+cookie=
+isbn=
+
 # save script execution before we clear positional parameters
 script="$0"
 
@@ -69,7 +73,7 @@ do
 
 	# dont sleep before first page
 	if [ "$page" -ne "$start_page" ]; then
-		# sleep for random number of seconds between 1 and 10
+		# sleep for random number of seconds between delay values
 		sleep_time=$(shuf -i ${MINDELAY}-${MAXDELAY} -n 1)
 		printf 'Sleeping for %s...\n' "${sleep_time}s"
 		sleep "$sleep_time"
@@ -77,7 +81,7 @@ do
 
 	# find page image
 	printf 'Getting page %s...\n' "$page"
-	img=$( curl -s "https://jigsaw.vitalsource.com/books/${isbn}/pages/${page}/content?width=2000" -H 'Host: jigsaw.vitalsource.com' \
+	img=$(curl -s "https://jigsaw.vitalsource.com/books/${isbn}/pages/${page}/content?width=2000" -H 'Host: jigsaw.vitalsource.com' \
 		-H 'User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0' \
 		-H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.5' --compressed \
 		-H "Referer: https://jigsaw.vitalsource.com/books/${isbn}/pages/recent?jigsaw_brand=vitalsource&xdm_e=https%3A%2F%2Fbookshelf.vitalsource.com&xdm_c=default191&xdm_p=1" \
@@ -90,7 +94,7 @@ do
 
 	# download page
 	printf 'Getting image: %s...\n' "$img" # only show suffix to avoid accidental click
-	 curl -s "https://jigsaw.vitalsource.com${img}" -H 'Host: jigsaw.vitalsource.com' -H 'User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0' \
+	curl -s "https://jigsaw.vitalsource.com${img}" -H 'Host: jigsaw.vitalsource.com' -H 'User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:52.0) Gecko/20100101 Firefox/52.0' \
 		-H 'Accept: */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H "Referer: https://jigsaw.vitalsource.com/books/${isbn}/pages/${page}/content?width=2000" \
 		-H "Cookie: $cookie" -H 'Connection: keep-alive' > "${isbn}/${page}.jpg"
 
